@@ -8,20 +8,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import auth
+from app.routers import auth, claims, reports, users
 
 app = FastAPI(
     title="TWIN CHECK API",
     version="1.0.0",
     description="Industrial insurance claims — AI × XR backend",
-    # Disable docs in production
     docs_url="/docs" if settings.environment != "production" else None,
     redoc_url="/redoc" if settings.environment != "production" else None,
 )
 
-# ============================================================
-# CORS
-# ============================================================
+# ── CORS ──────────────────────────────────────────────────────────────────────
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,26 +28,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ============================================================
-# Routers
-# ============================================================
+# ── Routers ───────────────────────────────────────────────────────────────────
 
-app.include_router(auth.router, prefix="/v1")
+app.include_router(auth.router,    prefix="/v1")
+app.include_router(claims.router,  prefix="/v1")
+app.include_router(reports.router, prefix="/v1")
+app.include_router(users.router,   prefix="/v1")
 
-# Remaining routers registered here as they are implemented:
-# app.include_router(claims.router, prefix="/v1")
-# app.include_router(equipment.router, prefix="/v1")
-# app.include_router(coverage.router, prefix="/v1")
-# app.include_router(reports.router, prefix="/v1")
-# app.include_router(evidence.router, prefix="/v1")
-# app.include_router(damage_findings.router, prefix="/v1")
-# app.include_router(gs_jobs.router, prefix="/v1")
-# app.include_router(users.router, prefix="/v1")
+# Remaining routers added as phases are implemented:
+# app.include_router(equipment.router,       prefix="/v1")  # Phase 2 UC-03
+# app.include_router(coverage.router,        prefix="/v1")  # Phase 2 UC-04
+# app.include_router(evidence.router,        prefix="/v1")  # Phase 2 UC-02, UC-04
+# app.include_router(damage_findings.router, prefix="/v1")  # Phase 2 UC-04
+# app.include_router(gs_jobs.router,         prefix="/v1")  # Phase 6
 
-
-# ============================================================
-# Health check
-# ============================================================
+# ── Health check ──────────────────────────────────────────────────────────────
 
 @app.get("/health")
 async def health_check() -> dict:
