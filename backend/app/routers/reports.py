@@ -11,11 +11,16 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any
+from pydantic import BaseModel
 
-from app.core.auth import require_any
+from app.core.auth import require_any, require_adjuster
 from app.core.database import get_db
 from app.models import Claim, DamageFinding, Report, User
 from app.models.user import ClaimStatus
+
+class SectionUpdateRequest(BaseModel):
+    data: dict[str, Any]
 
 router = APIRouter(tags=["reports"])
 
@@ -115,5 +120,63 @@ async def get_damage_findings(
                 }
                 for f in findings
             ]
+        }
+    }
+
+VALID_SECTIONS = {"a", "b", "c", "d", "e", "f", "g"}
+
+
+@router.patch("/claims/{claim_id}/report/section/{section}")
+async def update_report_section(
+    claim_id: UUID,
+    section: str,
+    body: SectionUpdateRequest,
+    current_user: User = Depends(require_adjuster),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Write data to one section of the live-accumulating report.
+    Called incrementally as each UC finishes processing (UC-02 → UC-04).
+    Each call overwrites the entire section — not a partial merge.
+    Adjuster must own the claim.
+    """
+    if section not in VALID_SECTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid section: '{section}'. Valid sections: a, b, c, d, e, f, g",
+        )
+
+    # Adjuster must own this claim
+    claim_result = await db.execute(
+        select(Claim).where(
+            Claim.id == claim_id,
+            Claim.assigned_to == current_user.id,
+        )
+    )
+    if not claim_result.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Ensure report row exists — created at UC-01 start
+    report_result = await db.execute(
+        select(Report).where(Report.claim_id == claim_id)
+    )
+    report = report_result.scalar_one_or_none()
+
+    if not report:
+        # Create empty report row if UC-01 hasn't created it yet
+        report = Report(claim_id=claim_id)
+        db.add(report)
+        await db.flush()
+
+    # Set the target section column dynamically
+    # Safe — section is validated against VALID_SECTIONS above
+    setattr(report, f"section_{section}", body.data)
+    await db.commit()
+    await db.refresh(report)
+
+    return {
+        "data": {
+            "section": section,
+            "updated_at": report.updated_at.isoformat(),
         }
     }

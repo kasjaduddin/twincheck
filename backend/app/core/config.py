@@ -13,6 +13,7 @@ All other fields have empty string defaults and are filled in
 as each phase is implemented.
 """
 
+from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,15 +32,15 @@ class Settings(BaseSettings):
     # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
     jwt_secret: str
     jwt_algorithm: str = "HS256"
-    # 7 days in seconds — matches FR-MR-01.6
-    jwt_expiry_seconds: int = 60 * 60 * 24 * 7
+    jwt_expiry_days: int = 7
 
     # --- Supabase Storage (required at Phase 5 — evidence upload) ---
     supabase_url: str = ""
-    supabase_service_key: str = ""  # service role key — never expose to client
+    supabase_service_role_key: str = ""  # service role key — never expose to client
 
     # --- AI Services (required at Phase 3 — STT + NLP) ---
     gemini_api_key: str = ""
+    whisper_model: str = "small"
 
     # --- RunPod (required at Phase 6 — GS pipeline) ---
     runpod_api_key: str = ""
