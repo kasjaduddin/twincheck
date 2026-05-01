@@ -62,7 +62,7 @@ async def login(
         role=user.role.value,
     )
     expires_at = datetime.now(timezone.utc) + timedelta(
-        seconds=settings.jwt_expiry_seconds
+        days=settings.jwt_expiry_days
     )
 
     return {

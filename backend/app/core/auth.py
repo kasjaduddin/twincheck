@@ -33,7 +33,7 @@ def create_access_token(user_id: UUID, email: str, role: str) -> str:
     Expiry is 7 days from issue time (FR-MR-01.6).
     """
     expires_at = datetime.now(timezone.utc) + timedelta(
-        seconds=settings.jwt_expiry_seconds
+        days=settings.jwt_expiry_days
     )
     payload = {
         "sub": str(user_id),
@@ -43,6 +43,13 @@ def create_access_token(user_id: UUID, email: str, role: str) -> str:
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
+def decode_token(token: str) -> dict:
+    """
+    Decode and validate JWT without HTTPBearer dependency.
+    Used by WebSocket endpoint — WS connections cannot set Authorization headers.
+    Raises JWTError if token is invalid or expired.
+    """
+    return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
