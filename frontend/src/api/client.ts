@@ -7,11 +7,25 @@ import type {
   DamageFinding,
   GsJob,
   AdjusterSummary,
+  Evidence,
 } from "../types";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/v1";
+
+// Derive WebSocket base from API URL.
+// http://localhost:8000/v1 → ws://localhost:8000
+// https://app.railway.app/v1 → wss://app.railway.app
+const WS_BASE = BASE_URL
+  .replace(/\/v1\/?$/, "")
+  .replace(/^https:/, "wss:")
+  .replace(/^http:/, "ws:");
+
+export function getWsUrl(claimId: string): string {
+  const token = getToken() ?? "";
+  return `${WS_BASE}/v1/claims/${claimId}/report/live?token=${token}`;
+}
 
 // ─── Session storage ─────────────────────────────────────────────────────────
 
@@ -77,7 +91,6 @@ async function request<T>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  // 401 on any authenticated request → clear session and redirect to login
   if (res.status === 401 && requiresAuth) {
     clearSession();
     window.location.href = "/login";
@@ -90,8 +103,29 @@ async function request<T>(
     throw new ApiError(res.status, json.error ?? `HTTP ${res.status}`);
   }
 
-  // Support both { "data": {...} } wrapper (API contract) and direct {...} response
-  // Backend Phase 0 returns unwrapped responses — this handles both formats
+  return (json.data ?? json) as T;
+}
+
+// Upload multipart/form-data — must NOT set Content-Type (browser adds boundary).
+async function uploadFormData<T>(path: string, formData: FormData): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (res.status === 401) {
+    clearSession();
+    window.location.href = "/login";
+    throw new ApiError(401, "Session expired");
+  }
+
+  const json = await res.json();
+  if (!res.ok) throw new ApiError(res.status, json.error ?? `HTTP ${res.status}`);
   return (json.data ?? json) as T;
 }
 
@@ -159,6 +193,36 @@ export const equipmentApi = {
 export const reportsApi = {
   get: (claimId: string): Promise<Report> =>
     request<Report>(`/claims/${claimId}/report`),
+
+  // Write one section of the live-accumulating report (UC-02 → UC-04).
+  // Each call overwrites the full section — not a partial merge.
+  updateSection: (
+    claimId: string,
+    section: string,
+    data: Record<string, unknown>,
+  ): Promise<{ section: string; updated_at: string }> =>
+    request(`/claims/${claimId}/report/section/${section}`, {
+      method: "PATCH",
+      body: { data },
+    }),
+};
+
+// ─── Evidence endpoints ──────────────────────────────────────────────────────
+
+export const evidenceApi = {
+  // Upload one file. Use FormData — GPS and timestamp must already be in the form.
+  upload: (claimId: string, formData: FormData): Promise<Evidence> =>
+    uploadFormData<Evidence>(`/claims/${claimId}/evidence`, formData),
+
+  list: (
+    claimId: string,
+    type?: string,
+  ): Promise<{ evidence: Evidence[] }> => {
+    const qs = type ? `?type=${type}` : "";
+    return request<{ evidence: Evidence[] }>(
+      `/claims/${claimId}/evidence${qs}`,
+    );
+  },
 };
 
 // ─── Damage findings endpoints ───────────────────────────────────────────────

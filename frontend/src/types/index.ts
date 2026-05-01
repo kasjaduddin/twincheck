@@ -102,6 +102,21 @@ export interface Report {
   updated_at: string;
 }
 
+// ─── Evidence ────────────────────────────────────────────────────────────────
+
+export type EvidenceType = "audio" | "video" | "point_cloud" | "splat";
+
+export interface Evidence {
+  id: string;
+  claim_id?: string;
+  type: EvidenceType | string;
+  storage_url: string;
+  gps_lat?: number;
+  gps_lng?: number;
+  captured_at: string;
+  created_at?: string;
+}
+
 // ─── Damage Findings ─────────────────────────────────────────────────────────
 
 export type DamageSeverity = "red" | "amber" | "green";
@@ -140,3 +155,24 @@ export interface AdjusterSummary {
   email: string;
   active_claims_count: number;
 }
+
+// ─── MR App — UC-02 Interview Checklist ──────────────────────────────────────
+
+// Keys match what the WebSocket broadcasts from the backend STT processor.
+export interface ChecklistState {
+  incident_when: boolean;
+  first_discovered: boolean;
+  equipment_condition: boolean;
+  scheduled_maintenance: boolean;
+  last_known_service: boolean;
+  other_witnesses: boolean;
+}
+
+export const DEFAULT_CHECKLIST: ChecklistState = {
+  incident_when: false,
+  first_discovered: false,
+  equipment_condition: false,
+  scheduled_maintenance: false,
+  last_known_service: false,
+  other_witnesses: false,
+};
